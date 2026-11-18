@@ -1,0 +1,44 @@
+name: Render Project Blue Book Video (1080p 60fps)
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  render:
+    name: Render Broadcast Video
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Pre-Bundle Remotion Code
+        run: npx remotion bundle src/index.ts build
+
+      - name: Render Full 60s 1080p 60fps Video
+        run: |
+          mkdir -p out
+          npx remotion render build ProjectBlueBook out/project_blue_book_1080p_60fps.mp4 \
+            --pixel-format=yuv420p \
+            --crf=18 \
+            --concurrency=4 \
+            --overwrite
+
+      - name: Upload Video Artifact (1-Click Download)
+        uses: actions/upload-artifact@v4
+        with:
+          name: project-blue-book-1080p-60fps
+          path: out/project_blue_book_1080p_60fps.mp4
+          retention-days: 14
