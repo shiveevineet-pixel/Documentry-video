@@ -1,0 +1,9 @@
+{
+  "python.analysis.diagnosticSeverityOverrides": {
+    "reportMissingImports": "none",
+    "reportUndefinedVariable": "none"
+  },
+  "pyrefly.diagnostics.ignoredCodes": [
+    "unresolved-import"
+  ]
+}

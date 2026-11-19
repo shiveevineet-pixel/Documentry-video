@@ -1,15 +1,16 @@
 import React from "react";
 import { Composition } from "remotion";
+import { MimicShort } from "./MimicShort";
 import { MainComposition } from "./MainComposition";
 
 export const Root: React.FC = () => {
   return (
     <>
-      {/* Primary 60fps Composition (60 seconds = 3600 frames) */}
+      {/* 55-second 1080x1920 60fps vertical 3D horror short "THE 3:00 AM MIMIC" (3300 frames) */}
       <Composition
-        id="ProjectBlueBook"
-        component={MainComposition}
-        durationInFrames={3600}
+        id="MimicShort"
+        component={MimicShort}
+        durationInFrames={3300}
         fps={60}
         width={1080}
         height={1920}
@@ -20,14 +21,27 @@ export const Root: React.FC = () => {
 
       {/* Studio Inspection Composition (with Instagram Reels Safe-Zone Overlay) */}
       <Composition
-        id="ProjectBlueBook-ReelsSafeZone"
+        id="MimicShort-ReelsSafeZone"
+        component={MimicShort}
+        durationInFrames={3300}
+        fps={60}
+        width={1080}
+        height={1920}
+        defaultProps={{
+          showSafeZoneOverlay: true,
+        }}
+      />
+
+      {/* Existing compositions */}
+      <Composition
+        id="ProjectBlueBook"
         component={MainComposition}
         durationInFrames={3600}
         fps={60}
         width={1080}
         height={1920}
         defaultProps={{
-          showSafeZoneOverlay: true,
+          showSafeZoneOverlay: false,
         }}
       />
     </>

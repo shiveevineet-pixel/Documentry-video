@@ -1,13 +1,28 @@
-name: Render Project Blue Book Video (1080p 60fps)
+name: Render "THE 3:00 AM MIMIC" (1080p 60fps)
 
 on:
   push:
     branches: [ main, master ]
   workflow_dispatch:
+    inputs:
+      composition:
+        description: 'Composition to render'
+        required: true
+        default: 'MimicShort'
+        type: choice
+        options:
+          - MimicShort
+          - MimicShort-ReelsSafeZone
+          - ProjectBlueBook
+      regenerate_3d:
+        description: 'Re-run Blender 3D generation in cloud'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   render:
-    name: Render Broadcast Video
+    name: Generate 3D & Render Full HD Video
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -21,24 +36,34 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - name: Install Dependencies
+      - name: Install Node Dependencies
         run: npm install
+
+      - name: Setup Blender & FFmpeg (if generating 3D in cloud)
+        if: ${{ github.event.inputs.regenerate_3d == 'true' || !hashFiles('public/renders/shot_08.mp4') }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y blender ffmpeg
+          blender -b -P generate_3am_mimic_shots.py
 
       - name: Pre-Bundle Remotion Code
         run: npx remotion bundle src/index.ts build
 
-      - name: Render Full 60s 1080p 60fps Video
+      - name: Render Full 55s 1080p 60fps Short
         run: |
           mkdir -p out
-          npx remotion render build ProjectBlueBook out/project_blue_book_1080p_60fps.mp4 \
+          COMP="${{ github.event.inputs.composition || 'MimicShort' }}"
+          echo "Rendering composition: $COMP"
+          npx remotion render build "$COMP" out/mimic_3am_1080p_60fps.mp4 \
             --pixel-format=yuv420p \
-            --crf=18 \
+            --codec=h264 \
+            --crf=16 \
             --concurrency=4 \
             --overwrite
 
       - name: Upload Video Artifact (1-Click Download)
         uses: actions/upload-artifact@v4
         with:
-          name: project-blue-book-1080p-60fps
-          path: out/project_blue_book_1080p_60fps.mp4
+          name: mimic-3am-1080p-60fps
+          path: out/mimic_3am_1080p_60fps.mp4
           retention-days: 14
