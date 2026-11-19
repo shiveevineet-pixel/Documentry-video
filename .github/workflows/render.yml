@@ -4,22 +4,50 @@ on:
   push:
     branches: [ main, master ]
   workflow_dispatch:
-    inputs:
-      composition:
-        description: 'Composition to render'
-        required: true
-        default: 'MimicShort'
-        type: choice
-        options:
-          - MimicShort
-          - MimicShort-ReelsSafeZone
-          - ProjectBlueBook
 
 jobs:
-  render:
-    name: Generate 3D & Render Full HD Video
+  # Stage 1: Render All 8 Modular Shots in Parallel across 8 Cloud Runners
+  render-shots:
+    name: Render Shot 0${{ matrix.shot }} (EEVEE Full HD)
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shot: [1, 2, 3, 4, 5, 6, 7, 8]
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Blender, FFmpeg & Mesa Drivers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y blender ffmpeg mesa-vulkan-drivers vulkan-tools xvfb
+
+      - name: Render 3D Shot 0${{ matrix.shot }}
+        run: |
+          echo "=== RENDERING SHOT 0${{ matrix.shot }} IN PARALLEL (EEVEE) ==="
+          if command -v xvfb-run &> /dev/null; then
+            xvfb-run -a blender -b -P generate_3am_mimic_shots.py -- --shot ${{ matrix.shot }}
+          else
+            blender -b -P generate_3am_mimic_shots.py -- --shot ${{ matrix.shot }}
+          fi
+          ls -lh public/renders/
+
+      - name: Upload Shot 0${{ matrix.shot }} MP4 Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shot_0${{ matrix.shot }}
+          path: public/renders/shot_0${{ matrix.shot }}.mp4
+          retention-days: 1
+
+  # Stage 2: Assemble Remotion Composition & Render 1080p Master Video
+  assemble-master:
+    name: Assemble Remotion Master & Export Video (1080p 60fps)
+    needs: render-shots
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout Repository
@@ -34,38 +62,32 @@ jobs:
       - name: Install Node Dependencies
         run: npm install
 
-      - name: Install Blender & FFmpeg
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y blender ffmpeg mesa-vulkan-drivers vulkan-tools xvfb
+      - name: Download All 8 Shot Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: public/renders/
+          merge-multiple: true
 
-      - name: Generate All 8 3D Shots with Blender
+      - name: Verify All 8 Modular Shots Ready
         run: |
-          echo "=== RUNNING BLENDER 3D HEADLESS PIPELINE (EEVEE) ==="
-          if command -v xvfb-run &> /dev/null; then
-            xvfb-run -a blender -b -P generate_3am_mimic_shots.py
-          else
-            blender -b -P generate_3am_mimic_shots.py
-          fi
-          echo "=== VERIFYING RENDERED SHOTS ==="
+          echo "=== VERIFYING DOWNLOADED MODULAR SHOTS ==="
           ls -lh public/renders/
 
       - name: Pre-Bundle Remotion Code
         run: npx remotion bundle src/index.ts build
 
-      - name: Render Full 55s 1080p 60fps Short
+      - name: Render Full 55s 1080p 60fps Master Short
         run: |
           mkdir -p out
-          COMP="${{ github.event.inputs.composition || 'MimicShort' }}"
-          echo "Rendering composition: $COMP"
-          npx remotion render build "$COMP" out/mimic_3am_1080p_60fps.mp4 \
+          echo "Rendering composition: MimicShort"
+          npx remotion render build MimicShort out/mimic_3am_1080p_60fps.mp4 \
             --pixel-format=yuv420p \
             --codec=h264 \
             --crf=16 \
             --concurrency=4 \
             --overwrite
 
-      - name: Upload Video Artifact (1-Click Download)
+      - name: Upload Final Instagram Master Video (1-Click Download)
         uses: actions/upload-artifact@v4
         with:
           name: mimic-3am-1080p-60fps

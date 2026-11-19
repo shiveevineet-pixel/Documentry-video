@@ -14,7 +14,7 @@ scene = bpy.context.scene
 # 2. Strict EEVEE Render Configuration (Zero Noise)
 scene.render.engine = 'BLENDER_EEVEE'
 if hasattr(scene, 'eevee'):
-    scene.eevee.taa_render_samples = 32
+    scene.eevee.taa_render_samples = 12
     if hasattr(scene.eevee, 'use_raytracing'):
         scene.eevee.use_raytracing = False
     if hasattr(scene.eevee, 'use_motion_blur'):
@@ -746,71 +746,78 @@ def render_previews():
     print("=== PREVIEWS COMPLETED SUCCESSFULLY ===")
 
 # 12. BATCH RENDER FUNCTION FOR ALL 8 SHOTS
-def render_all_shots():
+# 12. RENDER FUNCTION (Supports Single Shot or Batch)
+def render_single_shot(s_idx):
     scene.render.image_settings.file_format = 'JPEG'
     scene.render.image_settings.quality = 92
 
-    for s_idx, shot_info in enumerate(SHOTS, start=1):
-        shot_name = shot_info["id"]
-        n_frames = shot_info["frames"]
-        dur_sec = shot_info["dur_sec"]
-        target_mp4 = os.path.join(OUTPUT_DIR, f"{shot_name}.mp4")
-        shot_tmp_dir = os.path.join(TMP_DIR, shot_name)
+    shot_info = SHOTS[s_idx - 1]
+    shot_name = shot_info["id"]
+    n_frames = shot_info["frames"]
+    dur_sec = shot_info["dur_sec"]
+    target_mp4 = os.path.join(OUTPUT_DIR, f"{shot_name}.mp4")
+    shot_tmp_dir = os.path.join(TMP_DIR, shot_name)
 
-        os.makedirs(shot_tmp_dir, exist_ok=True)
-        print(f"\n--- RENDERING {shot_name.upper()} ({dur_sec}s | {n_frames} frames) ---")
+    os.makedirs(shot_tmp_dir, exist_ok=True)
+    print(f"\n--- RENDERING {shot_name.upper()} ({dur_sec}s | {n_frames} frames) ---")
 
-        # Reset shot state
-        store_light_data.energy = 1600
-        emerg_light_data.energy = 1400
-        freezer_door.rotation_euler = (0, 0, 0)
-        glass_door_l.scale = (1.1, 0.03, 1.75)
-        glass_door_r.scale = (1.1, 0.03, 1.75)
-        for shard in glass_shards:
-            shard.hide_render = True
+    # Reset shot state
+    store_light_data.energy = 1600
+    emerg_light_data.energy = 1400
+    freezer_door.rotation_euler = (0, 0, 0)
+    glass_door_l.scale = (1.1, 0.03, 1.75)
+    glass_door_r.scale = (1.1, 0.03, 1.75)
+    for shard in glass_shards:
+        shard.hide_render = True
 
-        if s_idx < 4:
-            mimic.morph_to_mimic(0.0)
+    if s_idx < 4:
+        mimic.morph_to_mimic(0.0)
 
-        # Render frames
-        for f in range(n_frames):
-            prog = f / max(1, n_frames - 1)
-            setup_shot(s_idx, prog)
+    # Render frames
+    for f in range(n_frames):
+        prog = f / max(1, n_frames - 1)
+        setup_shot(s_idx, prog)
 
-            frame_path = os.path.join(shot_tmp_dir, f"frame_{f:04d}.jpg")
-            scene.render.filepath = frame_path
-            bpy.ops.render.render(write_still=True)
-            if f % 15 == 0 or f == n_frames - 1:
-                print(f"[{shot_name}] Rendered frame {f+1}/{n_frames} ({prog*100:.1f}%)")
+        frame_path = os.path.join(shot_tmp_dir, f"frame_{f:04d}.jpg")
+        scene.render.filepath = frame_path
+        bpy.ops.render.render(write_still=True)
+        if f % 10 == 0 or f == n_frames - 1:
+            print(f"[{shot_name}] Rendered frame {f+1}/{n_frames} ({prog*100:.1f}%)")
 
-        # Encode with FFmpeg directly to 60fps 1080x1920 MP4
-        input_pattern = os.path.join(shot_tmp_dir, "frame_%04d.jpg")
-        src_fps = n_frames / dur_sec
-        ffmpeg_cmd = [
-            "ffmpeg", "-y",
-            "-framerate", str(src_fps),
-            "-i", input_pattern,
-            "-vf", "minterpolate=mi_mode=blend:fps=60,scale=1080:1920:flags=lanczos",
-            "-c:v", "libx264",
-            "-pix_fmt", "yuv420p",
-            "-r", "60",
-            "-crf", "16",
-            "-preset", "fast",
-            target_mp4
-        ]
-        print(f"[{shot_name}] Encoding to {target_mp4} at 60fps...")
-        subprocess.run(ffmpeg_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        print(f"[{shot_name}] Successfully created {target_mp4} ({os.path.getsize(target_mp4)} bytes)")
+    # Encode with FFmpeg directly to 60fps 1080x1920 MP4
+    input_pattern = os.path.join(shot_tmp_dir, "frame_%04d.jpg")
+    src_fps = n_frames / dur_sec
+    ffmpeg_cmd = [
+        "ffmpeg", "-y",
+        "-framerate", str(src_fps),
+        "-i", input_pattern,
+        "-vf", "minterpolate=mi_mode=blend:fps=60,scale=1080:1920:flags=lanczos",
+        "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",
+        "-r", "60",
+        "-crf", "16",
+        "-preset", "fast",
+        target_mp4
+    ]
+    print(f"[{shot_name}] Encoding to {target_mp4} at 60fps...")
+    subprocess.run(ffmpeg_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    print(f"[{shot_name}] Successfully created {target_mp4} ({os.path.getsize(target_mp4)} bytes)")
 
-        # Clean temporary frames for this shot
-        shutil.rmtree(shot_tmp_dir, ignore_errors=True)
+    # Clean temporary frames for this shot
+    shutil.rmtree(shot_tmp_dir, ignore_errors=True)
 
-    # Clean up base tmp dir
+def render_all_shots():
+    for s_idx in range(1, len(SHOTS) + 1):
+        render_single_shot(s_idx)
     shutil.rmtree(TMP_DIR, ignore_errors=True)
     print("\n=== ALL 8 SHOTS SUCCESSFULLY RENDERED IN PUBLIC/RENDERS/ ===")
 
 if __name__ == "__main__":
     if "--preview-only" in sys.argv:
         render_previews()
+    elif "--shot" in sys.argv:
+        shot_num = int(sys.argv[sys.argv.index("--shot") + 1])
+        print(f"=== TARGETING SINGLE SHOT: {shot_num} ===")
+        render_single_shot(shot_num)
     else:
         render_all_shots()
