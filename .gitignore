@@ -4,3 +4,7 @@ out/
 build/
 .cache/
 *.log
+tmp_blender_frames/
+test_*.py
+bench_*.py
+public/renders/*.mp4

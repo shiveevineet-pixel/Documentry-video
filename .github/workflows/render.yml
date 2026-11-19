@@ -14,11 +14,6 @@ on:
           - MimicShort
           - MimicShort-ReelsSafeZone
           - ProjectBlueBook
-      regenerate_3d:
-        description: 'Re-run Blender 3D generation in cloud'
-        required: false
-        default: false
-        type: boolean
 
 jobs:
   render:
@@ -39,12 +34,21 @@ jobs:
       - name: Install Node Dependencies
         run: npm install
 
-      - name: Setup Blender & FFmpeg (if generating 3D in cloud)
-        if: ${{ github.event.inputs.regenerate_3d == 'true' || !hashFiles('public/renders/shot_08.mp4') }}
+      - name: Install Blender & FFmpeg
         run: |
           sudo apt-get update
-          sudo apt-get install -y blender ffmpeg
-          blender -b -P generate_3am_mimic_shots.py
+          sudo apt-get install -y blender ffmpeg mesa-vulkan-drivers vulkan-tools xvfb
+
+      - name: Generate All 8 3D Shots with Blender
+        run: |
+          echo "=== RUNNING BLENDER 3D HEADLESS PIPELINE (EEVEE) ==="
+          if command -v xvfb-run &> /dev/null; then
+            xvfb-run -a blender -b -P generate_3am_mimic_shots.py
+          else
+            blender -b -P generate_3am_mimic_shots.py
+          fi
+          echo "=== VERIFYING RENDERED SHOTS ==="
+          ls -lh public/renders/
 
       - name: Pre-Bundle Remotion Code
         run: npx remotion bundle src/index.ts build
